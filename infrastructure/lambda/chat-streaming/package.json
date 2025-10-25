@@ -1,0 +1,10 @@
+{
+  "name": "chat-streaming-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function for streaming chat responses from Bedrock AgentCore",
+  "type": "module",
+  "main": "index.mjs",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-agentcore": "^3.739.0"
+  }
+}

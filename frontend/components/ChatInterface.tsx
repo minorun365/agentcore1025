@@ -48,7 +48,11 @@ export default function ChatInterface() {
     setMessages(prev => [...prev, { role: 'assistant', content: '', isToolUsing: false }]);
 
     try {
-      const response = await fetch('/api/chat', {
+      // Lambda Function URLを使用(環境変数から取得、なければ従来のAPI Routeを使用)
+      const apiUrl = process.env.NEXT_PUBLIC_LAMBDA_FUNCTION_URL || '/api/chat';
+      console.log('[DEBUG] Using API URL:', apiUrl);
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
