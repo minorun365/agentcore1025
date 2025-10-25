@@ -44,7 +44,6 @@ export const handler = awslambda.streamifyResponse(
           `data: ${JSON.stringify({ type: 'error', message: 'Invalid request body' })}\n\n`
         ));
         responseStream.end();
-        await responseStream.finished();
         return;
       }
 
@@ -57,7 +56,6 @@ export const handler = awslambda.streamifyResponse(
           `data: ${JSON.stringify({ type: 'error', message: 'Server configuration error' })}\n\n`
         ));
         responseStream.end();
-        await responseStream.finished();
         return;
       }
 
@@ -67,7 +65,6 @@ export const handler = awslambda.streamifyResponse(
           `data: ${JSON.stringify({ type: 'error', message: 'prompt is required' })}\n\n`
         ));
         responseStream.end();
-        await responseStream.finished();
         return;
       }
 
@@ -79,7 +76,6 @@ export const handler = awslambda.streamifyResponse(
           `data: ${JSON.stringify({ type: 'error', message: 'Tavily API key is required' })}\n\n`
         ));
         responseStream.end();
-        await responseStream.finished();
         return;
       }
 
@@ -116,7 +112,6 @@ export const handler = awslambda.streamifyResponse(
           `data: ${JSON.stringify({ type: 'error', message: 'No response from agent' })}\n\n`
         ));
         responseStream.end();
-        await responseStream.finished();
         return;
       }
 
@@ -192,7 +187,6 @@ export const handler = awslambda.streamifyResponse(
 
       console.log('Stream iteration completed');
       responseStream.end();
-      await responseStream.finished();
     } catch (error) {
       console.error('Error invoking agent:', error);
       // ストリームがまだ開いている場合のみエラーメッセージを送信
@@ -202,7 +196,6 @@ export const handler = awslambda.streamifyResponse(
             `data: ${JSON.stringify({ type: 'error', message: 'Failed to invoke agent', details: String(error) })}\n\n`
           ));
           responseStream.end();
-          await responseStream.finished();
         } catch (writeError) {
           console.error('Failed to write error to stream (stream already closed):', writeError);
         }
