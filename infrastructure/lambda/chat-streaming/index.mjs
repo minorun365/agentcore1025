@@ -195,14 +195,19 @@ export const handler = awslambda.streamifyResponse(
       await responseStream.finished();
     } catch (error) {
       console.error('Error invoking agent:', error);
-      try {
-        responseStream.write(encoder.encode(
-          `data: ${JSON.stringify({ type: 'error', message: 'Failed to invoke agent', details: String(error) })}\n\n`
-        ));
-        responseStream.end();
-        await responseStream.finished();
-      } catch (writeError) {
-        console.error('Failed to write error to stream:', writeError);
+      // ストリームがまだ開いている場合のみエラーメッセージを送信
+      if (!responseStream.destroyed && !responseStream.writableEnded) {
+        try {
+          responseStream.write(encoder.encode(
+            `data: ${JSON.stringify({ type: 'error', message: 'Failed to invoke agent', details: String(error) })}\n\n`
+          ));
+          responseStream.end();
+          await responseStream.finished();
+        } catch (writeError) {
+          console.error('Failed to write error to stream (stream already closed):', writeError);
+        }
+      } else {
+        console.error('Stream already closed, cannot send error message');
       }
     }
   }

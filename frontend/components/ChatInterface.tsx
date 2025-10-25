@@ -51,7 +51,6 @@ export default function ChatInterface() {
       // Lambda Function URLを直接呼び出す (ストリーミング優先)
       // 環境変数から取得、なければ従来のAPI Routeにフォールバック
       const apiUrl = process.env.NEXT_PUBLIC_LAMBDA_FUNCTION_URL || '/api/chat';
-      console.log('[DEBUG] Using API URL:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'POST',
