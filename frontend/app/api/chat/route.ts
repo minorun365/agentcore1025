@@ -42,7 +42,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const region = process.env.AWS_REGION || 'us-west-2';
+    // リージョンはAgent Runtime ARNから抽出、またはデフォルトでus-west-2
+    const region = agentRuntimeArn.split(':')[3] || 'us-west-2';
 
     // BedrockAgentCoreクライアント作成
     const client = new BedrockAgentCoreClient({ region });
