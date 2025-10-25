@@ -1,31 +1,33 @@
 /**
- * Chat API Route - AgentCore Runtime呼び出し (BFFパターン)
+ * Chat API Route - Lambda Function URL プロキシ (IAM署名付き)
  *
- * @aws-sdk/client-bedrock-agentcore を使用してAgentCore Runtimeを呼び出し、
- * ストリーミングレスポンスをブラウザに中継します。
+ * セキュリティ強化版:
+ * 1. ブラウザからこのAPI Routeを呼び出し
+ * 2. このAPI RouteがSSR Compute Roleの認証情報を使用してIAM署名を生成
+ * 3. IAM署名付きリクエストでLambda Function URLを呼び出し
+ * 4. Lambdaからのストリーミングレスポンスをそのままブラウザに転送
  *
- * 認証: AWS SDK が環境変数または実行ロール (Amplify Hosting/Lambda) から自動取得
+ * これにより、Lambda Function URLを直接公開せず、セキュアにストリーミングを実現
  */
 
-import { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } from '@aws-sdk/client-bedrock-agentcore';
-
-const encoder = new TextEncoder();
+import { SignatureV4 } from '@smithy/signature-v4';
+import { HttpRequest } from '@smithy/protocol-http';
+import { Sha256 } from '@aws-crypto/sha256-js';
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 
 export async function POST(request: Request) {
   try {
-    const { prompt, tavilyApiKey: clientTavilyApiKey } = await request.json();
+    const body = await request.json();
+    const { prompt, tavilyApiKey } = body;
 
-    // 環境変数からAgentCore Runtime ARNを取得
-    const agentRuntimeArn = process.env.AGENT_RUNTIME_ARN;
-    if (!agentRuntimeArn) {
+    // 環境変数からLambda Function URLを取得
+    const lambdaFunctionUrl = process.env.LAMBDA_FUNCTION_URL;
+    if (!lambdaFunctionUrl) {
       return new Response(
-        JSON.stringify({ error: 'AGENT_RUNTIME_ARN environment variable is not set' }),
+        JSON.stringify({ error: 'LAMBDA_FUNCTION_URL environment variable is not set' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
-
-    // Tavily APIキー: 環境変数があればそれを使用、なければクライアントから受け取る
-    const tavilyApiKey = process.env.TAVILY_API_KEY || clientTavilyApiKey;
 
     // バリデーション
     if (!prompt) {
@@ -35,148 +37,93 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!tavilyApiKey) {
+    // Lambda Function URLのリージョンを抽出 (例: https://xxx.lambda-url.us-west-2.on.aws/)
+    const urlMatch = lambdaFunctionUrl.match(/lambda-url\.([^.]+)\.on\.aws/);
+    const region = urlMatch ? urlMatch[1] : 'us-west-2';
+
+    console.log('[API Route] Lambda Function URL:', lambdaFunctionUrl);
+    console.log('[API Route] Region:', region);
+
+    // AWS認証情報を取得 (Amplify HostingのSSR Compute Roleから自動取得)
+    const credentialsProvider = fromNodeProviderChain();
+    const credentials = await credentialsProvider();
+
+    console.log('[API Route] Credentials obtained:', {
+      accessKeyId: credentials.accessKeyId.substring(0, 10) + '...',
+    });
+
+    // リクエストボディをJSON文字列化
+    const requestBody = JSON.stringify(body);
+
+    // Lambda Function URLのパースされたURL
+    const url = new URL(lambdaFunctionUrl);
+
+    // AWS Signature V4 署名を生成
+    const signer = new SignatureV4({
+      credentials,
+      region,
+      service: 'lambda',
+      sha256: Sha256,
+    });
+
+    // HttpRequestオブジェクトを作成
+    const httpRequest = new HttpRequest({
+      method: 'POST',
+      protocol: url.protocol,
+      hostname: url.hostname,
+      path: url.pathname,
+      headers: {
+        'Content-Type': 'application/json',
+        host: url.hostname,
+      },
+      body: requestBody,
+    });
+
+    // IAM署名を追加
+    const signedRequest = await signer.sign(httpRequest);
+
+    console.log('[API Route] Signed request headers:', Object.keys(signedRequest.headers));
+
+    // Lambda Function URLを呼び出し
+    const lambdaResponse = await fetch(lambdaFunctionUrl, {
+      method: 'POST',
+      headers: signedRequest.headers as Record<string, string>,
+      body: requestBody,
+    });
+
+    console.log('[API Route] Lambda response status:', lambdaResponse.status);
+    console.log('[API Route] Lambda response headers:', Object.fromEntries(lambdaResponse.headers.entries()));
+
+    if (!lambdaResponse.ok) {
+      const errorText = await lambdaResponse.text();
+      console.error('[API Route] Lambda error response:', errorText);
       return new Response(
-        JSON.stringify({ error: 'Tavily API key is required (set TAVILY_API_KEY or provide it in the request)' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: 'Failed to invoke Lambda Function URL',
+          status: lambdaResponse.status,
+          details: errorText
+        }),
+        { status: lambdaResponse.status, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    // リージョンはAgent Runtime ARNから抽出、またはデフォルトでus-west-2
-    const region = agentRuntimeArn.split(':')[3] || 'us-west-2';
-
-    // BedrockAgentCoreクライアント作成
-    const client = new BedrockAgentCoreClient({ region });
-
-    // ペイロード作成
-    const payload = JSON.stringify({
-      prompt,
-      tavily_api_key: tavilyApiKey,
-    });
-
-    // セッションID生成 (33文字以上必須)
-    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2)}-${Math.random().toString(36).substring(2)}`;
-
-    // AgentCore Runtime呼び出し
-    const command = new InvokeAgentRuntimeCommand({
-      agentRuntimeArn,
-      runtimeSessionId: sessionId,
-      payload: new TextEncoder().encode(payload),
-    });
-
-    const response = await client.send(command);
-
-    // ストリーミングレスポンスを作成
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          if (!response.response) {
-            console.log('No response.response');
-            controller.close();
-            return;
-          }
-
-          // SSE形式でストリームを処理
-          const decoder = new TextDecoder();
-
-          // response.response を AsyncIterable として扱う
-          const asyncIterable = response.response as AsyncIterable<any>;
-
-          console.log('Starting to iterate over response stream...');
-
-          for await (const event of asyncIterable) {
-            console.log('Received event:', event);
-
-            // イベントからバイトデータを取得
-            let bytes: Uint8Array | undefined;
-
-            if (event.chunk?.bytes) {
-              bytes = event.chunk.bytes;
-            } else if (event.data) {
-              // Bufferの場合
-              bytes = new Uint8Array(event.data);
-            } else if (event instanceof Uint8Array) {
-              bytes = event;
-            }
-
-            if (bytes) {
-              const text = decoder.decode(bytes);
-              console.log('Decoded text:', text);
-
-              // SSE形式 (data: {...}) のパース
-              if (text.includes('data: ')) {
-                const lines = text.split('\n');
-                for (const line of lines) {
-                  if (line.trim() && line.startsWith('data: ')) {
-                    const data = line.slice(6);
-
-                    // 文字列として引用符で囲まれている場合はスキップ
-                    if (data.startsWith('"') || data.startsWith("'")) {
-                      continue;
-                    }
-
-                    try {
-                      const parsedEvent = JSON.parse(data);
-                      processEvent(parsedEvent, controller);
-                    } catch (parseError) {
-                      // JSONパースエラーは無視（デバッグ情報など）
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          console.log('Stream iteration completed');
-          controller.close();
-        } catch (error) {
-          console.error('Stream error:', error);
-          controller.error(error);
-        }
-      },
-    });
-
-    // イベント処理を関数化
-    function processEvent(parsedEvent: any, controller: ReadableStreamDefaultController) {
-      // eventプロパティが存在しない場合は何もしない（内部メタデータなど）
-      if (!parsedEvent.event) {
-        return;
-      }
-
-      // ツール使用開始イベント
-      if (parsedEvent.event.contentBlockStart?.start?.toolUse) {
-        console.log('Tool use started');
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: 'tool_use', tool: 'tavily' })}\n\n`
-          )
-        );
-      }
-
-      // テキストコンテンツ - contentBlockDelta.delta.text のみを抽出
-      if (parsedEvent.event.contentBlockDelta?.delta?.text) {
-        const text = parsedEvent.event.contentBlockDelta.delta.text;
-        console.log('Sending text chunk:', text);
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: 'text', data: text })}\n\n`
-          )
-        );
-      }
-    }
-
-    return new Response(stream, {
+    // Lambdaからのストリーミングレスポンスをそのままブラウザに転送
+    // ReadableStreamをそのままパススルー (バッファリングなし)
+    return new Response(lambdaResponse.body, {
+      status: lambdaResponse.status,
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no', // NGINXバッファリングを無効化してストリーミングを有効に
+        'Connection': 'keep-alive',
       },
     });
   } catch (error) {
-    console.error('Error invoking agent:', error);
+    console.error('[API Route] Error:', error);
     return new Response(
-      JSON.stringify({ error: 'Failed to invoke agent', details: String(error) }),
+      JSON.stringify({
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : String(error)
+      }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }

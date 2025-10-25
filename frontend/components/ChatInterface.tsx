@@ -48,7 +48,8 @@ export default function ChatInterface() {
     setMessages(prev => [...prev, { role: 'assistant', content: '', isToolUsing: false }]);
 
     try {
-      // Lambda Function URLを使用(環境変数から取得、なければ従来のAPI Routeを使用)
+      // Lambda Function URLを直接呼び出す (ストリーミング優先)
+      // 環境変数から取得、なければ従来のAPI Routeにフォールバック
       const apiUrl = process.env.NEXT_PUBLIC_LAMBDA_FUNCTION_URL || '/api/chat';
       console.log('[DEBUG] Using API URL:', apiUrl);
 

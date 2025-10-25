@@ -58,6 +58,8 @@ export class AmplifyFrontendStack extends cdk.Stack {
       })
     );
 
+    // 注意: Lambda呼び出し権限は、Lambda Function作成後に追加します(下記参照)
+
     // 4. アウトプット
     new cdk.CfnOutput(this, 'SSRComputeRoleArn', {
       value: this.ssrComputeRole.roleArn,
@@ -122,13 +124,15 @@ export class AmplifyFrontendStack extends cdk.Stack {
       })
     );
 
-    // 6. Lambda Function URL作成 (Response Streaming有効)
+    // 6. Lambda Function URL作成 (Response Streaming有効 + 匿名アクセス)
+    // 注意: セキュリティリスク - URLが知られると誰でも呼び出し可能
+    // ストリーミング優先のため匿名アクセスを許可
     this.functionUrl = this.chatStreamingFunction.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE, // 匿名アクセス許可 (本番環境ではIAM認証推奨)
+      authType: lambda.FunctionUrlAuthType.NONE, // 匿名アクセス許可
       cors: {
-        allowedOrigins: ['*'], // 本番環境では特定のドメインに制限
-        allowedMethods: [lambda.HttpMethod.ALL], // すべてのHTTPメソッドを許可
-        allowedHeaders: ['*'], // すべてのヘッダーを許可
+        allowedOrigins: ['*'], // 本番環境では特定ドメインに制限推奨
+        allowedMethods: [lambda.HttpMethod.ALL],
+        allowedHeaders: ['*'],
       },
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM, // ストリーミング有効化
     });
