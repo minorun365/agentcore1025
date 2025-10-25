@@ -32,8 +32,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: infrastructure/package-lock.json
 
       # 3. AWS認証(OIDC)
       - name: Configure AWS credentials
@@ -59,7 +57,7 @@ jobs:
         run: |
           cd infrastructure
           # Bootstrap済みかチェック(エラーは無視)
-          npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }} || true
+          npx cdk bootstrap || true
 
       # 7. AmplifyFrontendStackをデプロイ
       - name: Deploy AmplifyFrontendStack
