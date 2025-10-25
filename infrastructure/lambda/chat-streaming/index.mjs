@@ -20,15 +20,13 @@ export const handler = awslambda.streamifyResponse(
     console.log('Received event:', JSON.stringify(event, null, 2));
 
     // メタデータ設定 (ヘッダーとステータスコード)
+    // 注意: CORSヘッダーはFunction URL設定で自動的に追加されるため、ここでは設定しない
     const metadata = {
       statusCode: 200,
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*', // CORS設定 (必要に応じて調整)
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
       }
     };
 
