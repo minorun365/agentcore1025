@@ -1,6 +1,10 @@
 version: 1
 applications:
   - appRoot: frontend
+    env:
+      variables:
+        AGENT_RUNTIME_ARN: ${AGENT_RUNTIME_ARN}
+        TAVILY_API_KEY: ${TAVILY_API_KEY}
     frontend:
       phases:
         preBuild:
