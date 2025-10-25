@@ -81,6 +81,38 @@ export class GitHubActionsRoleStack extends cdk.Stack {
       })
     );
 
+    // CDKデプロイ権限 (CloudFormation, IAM, Lambda, S3など)
+    githubActionsRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'CDKDeployAccess',
+        effect: iam.Effect.ALLOW,
+        actions: [
+          // CloudFormation
+          'cloudformation:*',
+          // S3 (CDK Assets用)
+          's3:*',
+          // IAM (ロール作成・更新用)
+          'iam:GetRole',
+          'iam:CreateRole',
+          'iam:DeleteRole',
+          'iam:PutRolePolicy',
+          'iam:DeleteRolePolicy',
+          'iam:AttachRolePolicy',
+          'iam:DetachRolePolicy',
+          'iam:GetRolePolicy',
+          'iam:PassRole',
+          'iam:TagRole',
+          'iam:UntagRole',
+          // Lambda
+          'lambda:*',
+          // SSM (CDK Bootstrap用)
+          'ssm:GetParameter',
+          'ssm:PutParameter',
+        ],
+        resources: ['*'],
+      })
+    );
+
     // 4. ロールARNを出力(GitHub Secretsに設定する値)
     new cdk.CfnOutput(this, 'GitHubActionsRoleArn', {
       value: githubActionsRole.roleArn,
