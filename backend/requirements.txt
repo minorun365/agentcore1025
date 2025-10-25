@@ -1,0 +1,11 @@
+# Strands Agents framework
+strands-agents
+
+# Bedrock AgentCore Runtime SDK
+bedrock-agentcore
+
+# MCP (Model Context Protocol) client for Tavily
+mcp
+
+# AWS Distro for OpenTelemetry (CloudWatch GenAI Observability)
+aws-opentelemetry-distro>=0.10.1

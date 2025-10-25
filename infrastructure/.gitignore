@@ -1,0 +1,53 @@
+# Compiled TypeScript
+*.js
+!jest.config.js
+*.d.ts
+
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out/
+
+# CDK context
+cdk.context.json
+
+# Build outputs
+dist/
+lib/*.js
+lib/*.d.ts
+bin/*.js
+bin/*.d.ts
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.bak
+tmp/
