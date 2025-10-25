@@ -1,0 +1,146 @@
+name: Deploy Agentcore Runtime
+
+# backendディレクトリの変更を検知して自動実行
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-agentcore.yml'
+  workflow_dispatch:  # 手動実行も可能
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REPOSITORY: strands-agent  # ECRリポジトリ名
+  AGENT_RUNTIME_ID: strandsAgent-oo5xY1C4tn  # AgentCore Runtime ID
+
+permissions:
+  id-token: write  # OIDC認証用
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. コードをチェックアウト
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. AWS認証(OIDC推奨)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3. ECRにログイン
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 4. Dockerイメージをビルド&プッシュ
+      - name: Build and push Docker image
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd backend
+
+          # ARM64向けにビルド(AgentCore Runtimeの要件)
+          docker buildx create --use --name arm-builder || true
+          docker buildx build \
+            --platform linux/arm64 \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            --push \
+            .
+
+          echo "新しいイメージをECRにプッシュしました:"
+          echo "image_uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # 5. AgentCore Runtimeを更新(自動バージョニング)
+      - name: Update AgentCore Runtime
+        id: update-runtime
+        env:
+          IMAGE_URI: ${{ steps.build-image.outputs.image_uri }}
+        run: |
+          echo "AgentCore Runtimeを更新中..."
+
+          # UpdateAgentRuntime APIを実行
+          # 注意: 実際のネットワーク設定やIAMロールARNは既存の値を使用する必要があります
+          # まず現在の設定を取得
+          CURRENT_CONFIG=$(aws bedrock-agentcore describe-agent-runtime \
+            --agent-runtime-id $AGENT_RUNTIME_ID \
+            --region $AWS_REGION)
+
+          ROLE_ARN=$(echo $CURRENT_CONFIG | jq -r '.roleArn')
+          NETWORK_MODE=$(echo $CURRENT_CONFIG | jq -r '.networkConfiguration.networkMode')
+
+          # AgentCore Runtimeを新しいコンテナイメージで更新
+          UPDATE_RESPONSE=$(aws bedrock-agentcore update-agent-runtime \
+            --agent-runtime-id $AGENT_RUNTIME_ID \
+            --region $AWS_REGION \
+            --agent-runtime-artifact "{
+              \"containerImage\": {
+                \"imageUri\": \"$IMAGE_URI\"
+              }
+            }" \
+            --role-arn "$ROLE_ARN" \
+            --network-configuration "{
+              \"networkMode\": \"$NETWORK_MODE\"
+            }")
+
+          # 新しいバージョン番号を取得
+          NEW_VERSION=$(echo $UPDATE_RESPONSE | jq -r '.agentRuntimeVersion')
+          echo "新しいバージョン: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      # 6. DEFAULTエンドポイントが自動更新されるのを待機
+      - name: Wait for Runtime to be ready
+        run: |
+          echo "AgentCore Runtimeが準備完了するまで待機中..."
+
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            STATUS=$(aws bedrock-agentcore describe-agent-runtime \
+              --agent-runtime-id $AGENT_RUNTIME_ID \
+              --region $AWS_REGION \
+              --query 'status' \
+              --output text)
+
+            echo "現在のステータス: $STATUS"
+
+            if [ "$STATUS" = "READY" ]; then
+              echo "✅ AgentCore Runtimeが準備完了しました!"
+              exit 0
+            elif [ "$STATUS" = "UPDATE_FAILED" ]; then
+              echo "❌ 更新に失敗しました"
+              exit 1
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "待機中... ($ATTEMPT/$MAX_ATTEMPTS)"
+            sleep 30
+          done
+
+          echo "❌ タイムアウト: AgentCore Runtimeの準備が完了しませんでした"
+          exit 1
+
+      # 7. デプロイ完了メッセージ
+      - name: Deployment successful
+        run: |
+          echo "🎉 AgentCore Runtimeが正常に更新されました!"
+          echo "新しいバージョン: ${{ steps.update-runtime.outputs.version }}"
+          echo "コンテナイメージ: ${{ steps.build-image.outputs.image_uri }}"
+          echo ""
+          echo "DEFAULTエンドポイントは自動的に最新バージョンを参照しています。"
+          echo "本番環境用のエンドポイントがある場合は、手動で更新してください:"
+          echo "aws bedrock-agentcore update-agent-runtime-endpoint \\"
+          echo "  --agent-runtime-id $AGENT_RUNTIME_ID \\"
+          echo "  --endpoint-name production-endpoint \\"
+          echo "  --agent-runtime-version ${{ steps.update-runtime.outputs.version }}"
