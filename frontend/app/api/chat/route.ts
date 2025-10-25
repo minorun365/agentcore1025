@@ -170,6 +170,7 @@ export async function POST(request: Request) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no', // NGINXバッファリングを無効化してストリーミングを有効に
       },
     });
   } catch (error) {
