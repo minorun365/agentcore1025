@@ -1,0 +1,74 @@
+name: Deploy Lambda Functions
+
+# Lambda関数またはinfrastructureディレクトリの変更を検知して自動実行
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infrastructure/lambda/**'
+      - 'infrastructure/lib/**'
+      - '.github/workflows/deploy-lambda.yml'
+  workflow_dispatch:  # 手動実行も可能
+
+env:
+  AWS_REGION: us-west-2
+
+permissions:
+  id-token: write  # OIDC認証用
+  contents: read
+
+jobs:
+  deploy-lambda:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. コードをチェックアウト
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Node.jsセットアップ
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: infrastructure/package-lock.json
+
+      # 3. AWS認証(OIDC)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 4. 依存関係をインストール
+      - name: Install dependencies
+        run: |
+          cd infrastructure
+          npm ci
+
+      # 5. TypeScriptをビルド
+      - name: Build CDK app
+        run: |
+          cd infrastructure
+          npm run build
+
+      # 6. CDK Bootstrapが完了しているか確認
+      - name: Verify CDK Bootstrap
+        run: |
+          cd infrastructure
+          # Bootstrap済みかチェック(エラーは無視)
+          npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }} || true
+
+      # 7. AmplifyFrontendStackをデプロイ
+      - name: Deploy AmplifyFrontendStack
+        run: |
+          cd infrastructure
+          npx cdk deploy AmplifyFrontendStack --require-approval never
+
+      # 8. デプロイ完了メッセージ
+      - name: Deployment successful
+        run: |
+          echo "✅ Lambda関数が正常にデプロイされました!"
+          echo "Lambda Function URLは CloudFormation Outputs で確認できます"
