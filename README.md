@@ -357,7 +357,9 @@ opentelemetry-instrument python -m agent
 - ✅ **Amplify認証統合完了**
   - Amazon Cognito User Pool作成 (メールログイン)
   - Authenticator UIコンポーネント統合 (`@aws-amplify/ui-react`)
-  - 日本語ラベル対応
+  - 日本語UI完全対応（I18nによる翻訳）
+  - 個人情報保護法対応の注記表示
+  - 認証前後で統一されたヘッダーデザイン
   - ユーザー情報表示とサインアウト機能
 - ✅ **Amplify Gen2バックエンドデプロイ完了**
   - 本番環境用バックエンドをローカルからデプロイ (identifier: `production`)

@@ -9,6 +9,9 @@ Next.js + Amplify Gen2で構築されたチャットアプリケーション。S
 ## 🔑 主な機能
 
 - **認証**: Amazon Cognito（メールアドレス + パスワード）
+  - 日本語UI対応
+  - 個人情報保護法対応の注記表示
+  - 認証前後で統一されたヘッダーデザイン
 - **チャット**: リアルタイムストリーミング応答
 - **検索**: Tavily APIによるWeb検索
 - **AI**: Strands Agents + Bedrock Claude 3.5 Sonnet
