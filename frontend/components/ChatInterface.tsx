@@ -197,15 +197,7 @@ export default function ChatInterface() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      {/* ヘッダー */}
-      <header className="bg-white border-b border-gray-200 p-4">
-        <h1 className="text-2xl font-bold text-gray-800">なんでも検索エージェント</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          Strands AgentsがMCPサーバーを使って情報収集します!
-        </p>
-      </header>
-
+    <div className="flex flex-col h-full bg-gray-50">
       {/* サイドバー設定 - 環境変数にAPIキーがない場合のみ表示 */}
       {!hasEnvKey && (
         <div className="bg-blue-50 border-b border-blue-200 p-4">

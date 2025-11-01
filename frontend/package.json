@@ -13,6 +13,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@aws-amplify/ui-react": "^6.13.1",
     "@aws-crypto/sha256-js": "^5.2.0",
     "@aws-sdk/client-bedrock-agentcore": "^3.0.0",
     "@aws-sdk/credential-providers": "^3.0.0",

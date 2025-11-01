@@ -1,13 +1,20 @@
 version: 1
 applications:
   - appRoot: frontend
+    backend:
+      phases:
+        build:
+          commands:
+            - npm ci --cache .npm --prefer-offline
+            - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
     frontend:
       phases:
         preBuild:
           commands:
-            - npm ci
+            - npm ci --cache .npm --prefer-offline
         build:
           commands:
+            - env | grep -e LAMBDA_FUNCTION_URL >> .env.production
             - env | grep -e AGENT_RUNTIME_ARN >> .env.production
             - env | grep -e TAVILY_API_KEY >> .env.production
             - npm run build
@@ -17,5 +24,6 @@ applications:
           - '**/*'
       cache:
         paths:
+          - .npm/**/*
           - node_modules/**/*
           - .next/cache/**/*
