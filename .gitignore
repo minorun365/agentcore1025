@@ -51,3 +51,4 @@ coverage/
 dist/
 build/
 out/
+.playwright-mcp/
