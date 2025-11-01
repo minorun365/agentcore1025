@@ -47,7 +47,7 @@ next-env.d.ts
 
 # amplify
 .amplify
-amplify_outputs*
+# amplify_outputs* - 本番環境用の設定をコミットするためコメントアウト
 amplifyconfiguration*
 
 # IDE
