@@ -141,6 +141,31 @@ GitHub ActionsからAgentCore Runtimeをデプロイするためのロールで�
 - GitHub OIDC Provider
 - IAM Role for GitHub Actions
 
+## デプロイ済みリソース
+
+### AgentCoreStack
+
+**Status**: ✅ デプロイ済み
+
+- **Runtime ARN**: `arn:aws:bedrock-agentcore:us-west-2:715841358122:runtime/strandsAgent-oo5xY1C4tn`
+- **Runtime ID**: `strandsAgent-oo5xY1C4tn`
+- **リージョン**: `us-west-2` (オレゴン)
+
+### AmplifyFrontendStack
+
+**Status**: ✅ デプロイ済み
+
+- **Lambda Function URL**: https://kgfw2sjc76jwecnqaz6nab7f7y0qaqvh.lambda-url.us-west-2.on.aws/
+- **SSR Compute Role**: Amplify Hosting App (`d19iepfgircxoy`) にアタッチ済み
+- **認証**: IAM（SSR Compute Roleからのみアクセス可）
+
+### GitHubActionsRoleStack
+
+**Status**: ✅ デプロイ済み
+
+- **OIDC Provider**: GitHub Actions用
+- **Role ARN**: GitHub ActionsワークフローからAgentCoreデプロイ可能
+
 ## Useful commands
 
 * `npm run build`   compile typescript to js

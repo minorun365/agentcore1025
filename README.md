@@ -347,31 +347,63 @@ opentelemetry-instrument python -m agent
   - AgentCore Runtime作成完了
   - Runtime ARN: `arn:aws:bedrock-agentcore:us-west-2:YOUR_AWS_ACCOUNT_ID:runtime/strandsAgent-XXXXXXXXXX`
 
-**4. フロントエンド (Next.js)**
+**4. フロントエンド (Next.js + Amplify Gen2)**
 - ✅ フロントエンド実装完了
   - チャットUI ([frontend/components/ChatInterface.tsx](frontend/components/ChatInterface.tsx))
   - API Route ([frontend/app/api/chat/route.ts](frontend/app/api/chat/route.ts))
-  - BFFパターン採用 (Next.js → AgentCore Runtime)
-  - 公式SDK使用 (`@aws-sdk/client-bedrock-agentcore`)
+  - BFFパターン採用 (Next.js → Lambda Function URL → AgentCore Runtime)
+  - Lambda Response Streaming対応 (SSE)
   - ストリーミング対応 (SSE)
+- ✅ **Amplify認証統合完了**
+  - Amazon Cognito User Pool作成 (メールログイン)
+  - Authenticator UIコンポーネント統合 (`@aws-amplify/ui-react`)
+  - 日本語ラベル対応
+  - ユーザー情報表示とサインアウト機能
+- ✅ **Amplify Gen2バックエンドデプロイ完了**
+  - 本番環境用バックエンドをローカルからデプロイ (identifier: `production`)
+  - 開発環境と本番環境を分離 (dev: `mi-onda`, prod: `production`)
+  - `amplify_outputs.json`を安全にGitコミット（公開情報のみ含む）
+  - IAM PassRole権限問題を回避 (amplify.ymlのbackendセクション削除)
+- ✅ **本番環境デプロイ完了**
+  - Amplify Hostingでホスティング中
+  - 本番URL: https://d19iepfgircxoy.amplifyapp.com
+  - 環境変数設定完了 (`LAMBDA_FUNCTION_URL`, `AGENT_RUNTIME_ARN`, `TAVILY_API_KEY`)
 - ✅ package.json更新完了
 
 #### 📋 デプロイ済みリソース情報
 
+**Amplify Hosting (本番環境):**
+- **本番URL**: https://d19iepfgircxoy.amplifyapp.com
+- **App ID**: `d19iepfgircxoy`
+- **リージョン**: `us-west-2` (オレゴン)
+- **デプロイ方法**: GitHub連携 (mainブランチ自動デプロイ)
+
+**Amplify認証 (Cognito):**
+- **User Pool ID**: `us-west-2_JlD1gxVOC`
+- **Identity Pool ID**: `us-west-2:60d4bd1a-ed92-4448-a62d-ec04d45f0df4`
+- **App Client ID**: `2obhkrgmaqnb1lqchoms0kkoeq`
+- **ログイン方式**: メールアドレス + パスワード
+- **環境**: 本番 (identifier: `production`)
+
+**Lambda Function URL:**
+- **URL**: https://kgfw2sjc76jwecnqaz6nab7f7y0qaqvh.lambda-url.us-west-2.on.aws/
+- **認証**: IAM (Amplify SSR Compute Roleからのみアクセス可)
+- **機能**: Chat Streaming (Response Streaming有効)
+
 **AgentCore Runtime:**
-- **Runtime ARN**: `arn:aws:bedrock-agentcore:us-west-2:YOUR_AWS_ACCOUNT_ID:runtime/strandsAgent-XXXXXXXXXX`
-- **Runtime ID**: `strandsAgent-XXXXXXXXXX`
+- **Runtime ARN**: `arn:aws:bedrock-agentcore:us-west-2:715841358122:runtime/strandsAgent-oo5xY1C4tn`
+- **Runtime ID**: `strandsAgent-oo5xY1C4tn`
 - **リージョン**: `us-west-2` (オレゴン)
 - **プラットフォーム**: ARM64
 - **ネットワーク**: パブリック
 - **認証**: IAM
 
 **ECRリポジトリ:**
-- **URI**: `YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/strands-agent`
+- **URI**: `715841358122.dkr.ecr.us-west-2.amazonaws.com/strands-agent`
 - **最新イメージ**: `latest` (Digest: `sha256:f86e314e...`)
 
 **IAM実行ロール:**
-- **ARN**: `arn:aws:iam::YOUR_AWS_ACCOUNT_ID:role/AgentCoreRuntimeExecutionRole`
+- **ARN**: `arn:aws:iam::715841358122:role/AgentCoreRuntimeExecutionRole`
 - **権限**: Bedrock/CloudWatch/ECR
 
 #### ⏳ 次のステップ
