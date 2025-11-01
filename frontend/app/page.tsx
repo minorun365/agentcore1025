@@ -1,31 +1,69 @@
 'use client';
 
 import ChatInterface from '@/components/ChatInterface';
-import { Authenticator } from '@aws-amplify/ui-react';
+import { Authenticator, translations } from '@aws-amplify/ui-react';
+import { I18n } from 'aws-amplify/utils';
 import '@aws-amplify/ui-react/styles.css';
+
+// 日本語翻訳を設定
+I18n.putVocabularies(translations);
+I18n.setLanguage('ja');
+
+// カスタム日本語翻訳
+I18n.putVocabularies({
+  ja: {
+    'Sign In': 'サインイン',
+    'Sign Up': '新規登録',
+    'Sign Out': 'サインアウト',
+    'Sign in': 'サインイン',
+    'Sign up': '新規登録',
+    'Email': 'メールアドレス',
+    'Password': 'パスワード',
+    'Confirm Password': 'パスワード（確認）',
+    'Enter your Email': 'メールアドレスを入力',
+    'Enter your Password': 'パスワードを入力',
+    'Please confirm your Password': 'パスワードを再入力',
+    'Forgot your password?': 'パスワードをお忘れですか？',
+    'Reset Password': 'パスワードをリセット',
+    'Reset your password': 'パスワードをリセット',
+    'Back to Sign In': 'サインインに戻る',
+    'Send code': '確認コードを送信',
+    'Code': '確認コード',
+    'New Password': '新しいパスワード',
+    'Submit': '送信',
+    'Code *': '確認コード *',
+    'New password': '新しいパスワード',
+    'Your passwords must match': 'パスワードが一致しません',
+    'Incorrect username or password.': 'メールアドレスまたはパスワードが正しくありません',
+    'User does not exist.': 'ユーザーが存在しません',
+    'User already exists': 'このメールアドレスは既に登録されています',
+    'Invalid password format': 'パスワードの形式が正しくありません',
+    'Account recovery requires verified contact information': 'アカウント復旧には確認済みの連絡先が必要です',
+    'Invalid verification code provided, please try again.': '確認コードが正しくありません。もう一度お試しください',
+    'Username cannot be empty': 'メールアドレスを入力してください',
+    'Password cannot be empty': 'パスワードを入力してください',
+    'Password must have at least 8 characters': 'パスワードは8文字以上で入力してください',
+    'Password must have upper case letters': 'パスワードには大文字を含めてください',
+    'Password must have lower case letters': 'パスワードには小文字を含めてください',
+    'Password must have numbers': 'パスワードには数字を含めてください',
+    'Password must have special characters': 'パスワードには記号を含めてください',
+    'Confirmation code cannot be empty': '確認コードを入力してください',
+    'Create Account': 'アカウントを作成',
+    'Creating Account': 'アカウント作成中...',
+    'Confirm': '確認',
+    'Confirming': '確認中...',
+    'Resend Code': 'コードを再送信',
+    'Skip': 'スキップ',
+    'Verify': '確認',
+    'Verify Contact': '連絡先を確認',
+  },
+});
 
 export default function Home() {
   return (
     <Authenticator
       loginMechanisms={['email']}
       signUpAttributes={['email']}
-      formFields={{
-        signUp: {
-          email: {
-            label: 'メールアドレス',
-            placeholder: 'example@example.com',
-            isRequired: true,
-          },
-          password: {
-            label: 'パスワード',
-            placeholder: '8文字以上(大文字・小文字・数字・記号を含む)',
-            isRequired: true,
-          },
-          confirm_password: {
-            label: 'パスワード(確認)',
-          },
-        },
-      }}
     >
       {({ signOut, user }) => (
         <div className="flex flex-col h-screen">
