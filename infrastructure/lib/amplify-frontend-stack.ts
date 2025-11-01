@@ -124,11 +124,10 @@ export class AmplifyFrontendStack extends cdk.Stack {
       })
     );
 
-    // 6. Lambda Function URL作成 (Response Streaming有効 + 匿名アクセス)
-    // 注意: セキュリティリスク - URLが知られると誰でも呼び出し可能
-    // ストリーミング優先のため匿名アクセスを許可
+    // 6. Lambda Function URL作成 (Response Streaming有効 + IAM認証)
+    // Cognito Identity Poolの認証済みユーザーのみがアクセス可能
     this.functionUrl = this.chatStreamingFunction.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE, // 匿名アクセス許可
+      authType: lambda.FunctionUrlAuthType.AWS_IAM, // IAM認証必須
       cors: {
         allowedOrigins: ['*'], // 本番環境では特定ドメインに制限推奨
         allowedMethods: [lambda.HttpMethod.ALL],
@@ -137,7 +136,21 @@ export class AmplifyFrontendStack extends cdk.Stack {
       invokeMode: lambda.InvokeMode.RESPONSE_STREAM, // ストリーミング有効化
     });
 
-    // 7. Lambda Function URLをアウトプット
+    // 7. Cognito Identity Pool認証済みロール用のポリシーを作成
+    // このポリシーを手動で既存のIdentity Pool認証済みロールにアタッチする必要があります
+    const identityPoolAuthPolicy = new iam.ManagedPolicy(this, 'IdentityPoolAuthPolicy', {
+      managedPolicyName: 'CognitoIdentityPoolLambdaInvokePolicy',
+      description: 'Policy for Cognito Identity Pool authenticated users to invoke Lambda Function URL',
+      statements: [
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['lambda:InvokeFunctionUrl'],
+          resources: [this.chatStreamingFunction.functionArn],
+        }),
+      ],
+    });
+
+    // 8. Lambda Function URLをアウトプット
     new cdk.CfnOutput(this, 'ChatStreamingFunctionUrl', {
       value: this.functionUrl.url,
       description: 'Lambda Function URL for streaming chat API (use this in frontend)',
@@ -147,6 +160,27 @@ export class AmplifyFrontendStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ChatStreamingFunctionArn', {
       value: this.chatStreamingFunction.functionArn,
       description: 'Lambda Function ARN',
+    });
+
+    new cdk.CfnOutput(this, 'IdentityPoolAuthPolicyArn', {
+      value: identityPoolAuthPolicy.managedPolicyArn,
+      description: 'Managed Policy ARN to attach to Cognito Identity Pool authenticated role',
+    });
+
+    // Identity Pool認証済みロールへのポリシーアタッチ手順を出力
+    new cdk.CfnOutput(this, 'IdentityPoolPolicyAttachInstructions', {
+      value: [
+        '=== Cognito Identity Pool設定手順 ===',
+        '以下のコマンドでIdentity Pool認証済みロールにポリシーをアタッチ:',
+        '',
+        `aws iam attach-role-policy \\`,
+        `  --role-name <IDENTITY_POOL_AUTH_ROLE_NAME> \\`,
+        `  --policy-arn ${identityPoolAuthPolicy.managedPolicyArn}`,
+        '',
+        'Identity Pool認証済みロール名は以下のコマンドで確認:',
+        'aws cognito-identity get-identity-pool-roles --identity-pool-id <IDENTITY_POOL_ID>',
+      ].join('\n'),
+      description: 'Instructions to attach policy to Identity Pool authenticated role',
     });
   }
 }

@@ -2,6 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { fetchAuthSession } from 'aws-amplify/auth';
+import { SignatureV4 } from '@smithy/signature-v4';
+import { Sha256 } from '@aws-crypto/sha256-js';
+import { HttpRequest } from '@smithy/protocol-http';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -33,6 +37,59 @@ export default function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // IAM署名付きでLambda Function URLを呼び出す
+  const invokeLambdaWithIAM = async (lambdaUrl: string, body: any): Promise<Response> => {
+    try {
+      // 1. Cognito Identity Poolから一時認証情報を取得
+      const session = await fetchAuthSession();
+      const credentials = session.credentials;
+
+      if (!credentials) {
+        throw new Error('認証情報を取得できませんでした。再度ログインしてください。');
+      }
+
+      // 2. URLをパースしてホスト名とパスを取得
+      const url = new URL(lambdaUrl);
+
+      // 3. リクエストボディを準備
+      const requestBody = JSON.stringify(body);
+
+      // 4. HTTPリクエストを構築
+      const request = new HttpRequest({
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'host': url.hostname,
+        },
+        body: requestBody,
+      });
+
+      // 5. SignatureV4でリクエストに署名
+      const signer = new SignatureV4({
+        credentials: credentials,
+        region: 'us-west-2', // Lambda Function URLのリージョン
+        service: 'lambda',
+        sha256: Sha256,
+      });
+
+      const signedRequest = await signer.sign(request);
+
+      // 6. 署名されたリクエストを送信
+      const response = await fetch(`${url.protocol}//${url.hostname}${url.pathname}`, {
+        method: signedRequest.method,
+        headers: signedRequest.headers as HeadersInit,
+        body: signedRequest.body as BodyInit,
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Error during Lambda invocation:', error);
+      throw error;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -48,17 +105,16 @@ export default function ChatInterface() {
     setMessages(prev => [...prev, { role: 'assistant', content: '', isToolUsing: false }]);
 
     try {
-      // Lambda Function URLを直接呼び出す (ストリーミング優先)
-      // 環境変数から取得、なければ従来のAPI Routeにフォールバック
-      const apiUrl = process.env.NEXT_PUBLIC_LAMBDA_FUNCTION_URL || '/api/chat';
+      // Lambda Function URLをIAM署名付きで直接呼び出す
+      const lambdaUrl = process.env.NEXT_PUBLIC_LAMBDA_FUNCTION_URL;
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: userMessage,
-          tavilyApiKey: tavilyApiKey || undefined,
-        }),
+      if (!lambdaUrl) {
+        throw new Error('Lambda Function URLが設定されていません');
+      }
+
+      const response = await invokeLambdaWithIAM(lambdaUrl, {
+        prompt: userMessage,
+        tavilyApiKey: tavilyApiKey || undefined,
       });
 
       if (!response.ok) {
@@ -79,17 +135,35 @@ export default function ChatInterface() {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          break;
+        }
 
         const chunk = decoder.decode(value, { stream: true });
         const lines = chunk.split('\n');
 
         for (const line of lines) {
-          if (!line.trim() || !line.startsWith('data: ')) continue;
+          if (!line.trim() || !line.startsWith('data: ')) {
+            continue;
+          }
 
           try {
             const jsonStr = line.slice(6); // "data: " を除去
             const event = JSON.parse(jsonStr);
+
+            // エラーイベント
+            if (event.type === 'error') {
+              setMessages((prev) => {
+                const newMessages = [...prev];
+                newMessages[newMessages.length - 1] = {
+                  role: 'assistant',
+                  content: `エラー: ${event.message}`,
+                  isToolUsing: false,
+                };
+                return newMessages;
+              });
+              continue;
+            }
 
             // ツール使用イベント
             if (event.type === 'tool_use') {
@@ -123,29 +197,21 @@ export default function ChatInterface() {
               // バッファをリセット(次のテキストは新しい吹き出し用)
               currentBuffer = '';
             } else if (event.type === 'text') {
-              console.log('[DEBUG] Text event:', { isInToolUse, currentBuffer: currentBuffer.substring(0, 50), toolUseMessageIndex });
-
               if (isInToolUse && currentBuffer === '') {
-                console.log('[DEBUG] First text after tool use - marking tool as completed', 'toolUseMessageIndex:', toolUseMessageIndex);
                 // ツール使用後の最初のテキスト
                 // ツールインジケーターを完了状態に変更 + 新しいメッセージを追加(1回の更新で)
                 const newText = event.data;
                 const savedToolIndex = toolUseMessageIndex;  // クロージャ用にキャプチャ
 
                 setMessages((prev) => {
-                  console.log('[DEBUG] setMessages callback - prev.length:', prev.length, 'savedToolIndex:', savedToolIndex);
                   const newMessages = [...prev];
 
                   // ツールインジケーターを完了状態に変更
                   if (savedToolIndex >= 0 && savedToolIndex < newMessages.length) {
-                    console.log('[DEBUG] Updating tool message at index:', savedToolIndex, 'Message:', newMessages[savedToolIndex]);
                     newMessages[savedToolIndex] = {
                       ...newMessages[savedToolIndex],
                       toolCompleted: true,
                     };
-                    console.log('[DEBUG] Updated message:', newMessages[savedToolIndex]);
-                  } else {
-                    console.log('[DEBUG] Condition failed! savedToolIndex:', savedToolIndex, 'newMessages.length:', newMessages.length);
                   }
 
                   // 新しいメッセージを追加
@@ -251,10 +317,6 @@ export default function ChatInterface() {
                 {/* ツール使用インジケーター */}
                 {message.isToolUsing && (
                   <div className={`flex items-center gap-2 text-sm ${message.toolCompleted ? 'text-green-600' : 'text-blue-600'}`}>
-                    {(() => {
-                      console.log(`[UI DEBUG] Message ${index}:`, { isToolUsing: message.isToolUsing, toolCompleted: message.toolCompleted });
-                      return null;
-                    })()}
                     {message.toolCompleted ? (
                       <span className="inline-block w-4 h-4">✓</span>
                     ) : (
