@@ -36,16 +36,18 @@ export default function Home() {
               <p className="text-sm text-gray-600 mt-1">
                 Strands AgentsがMCPサーバーを使って情報収集します!
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <p className="text-xs text-gray-500">
                 ログイン中: <span className="font-semibold">{user?.signInDetails?.loginId}</span>
               </p>
+              <button
+                onClick={signOut}
+                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                サインアウト
+              </button>
             </div>
-            <button
-              onClick={signOut}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              サインアウト
-            </button>
           </div>
 
           {/* チャットインターフェース */}
